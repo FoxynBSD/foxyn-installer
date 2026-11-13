@@ -19,13 +19,24 @@ Ruby and its standard JSON library are required. No gems are needed.
 
 ```sh
 ruby test/service_test.rb
+ruby test/hardware_test.rb
 printf '%s\n' '{"version":1,"id":1,"operation":"capabilities"}' | bin/foxyn-installer-backend
 ```
 
 The backend reads one JSON request per line and emits one JSON response per
 line, keeping `id` for correlation. `version` is currently `1`. Supported
 operations are `capabilities`, `check-hardware`, `plan`, and `install`.
-`check-hardware` currently returns an incomplete, blocking result. `install`
+`check-hardware` reads the architecture, CPU model and physical memory on
+DragonFly, reporting unavailable values rather than guessing. It also records
+whether the kernel provides a nonempty EFI memory map. Its absence or a failed
+read remains unknown and is not classified as BIOS. It reports PCI devices
+shown as unattached by `pciconf`, including vendor and device IDs; a failed
+PCI inventory is distinguished from an empty result. Network interface
+flags and any link status are recorded without addresses. They do not prove
+connectivity, and an unavailable interface inventory remains a blocker. These are
+observations, not a compatibility verdict: boot mode validation, CPU features, measured
+minimums, display, input, network and target-disk checks are still missing.
+The result remains incomplete and blocking. `install`
 returns `accepted: false` and performs no changes.
 
 A plan describes a whole-disk GPT/UEFI layout, the selected root filesystem
