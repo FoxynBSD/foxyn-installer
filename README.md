@@ -76,3 +76,11 @@ validate keyboard navigation or an installation. Backend queries run on a worker
 64 KiB response limit. A deliberately unresponsive backend produced the
 [timeout message](docs/screenshots/qemu-backend-timeout.png) in QEMU. More
 error-path, keyboard and privilege-boundary testing is required before use.
+
+Manual backend error probes are in `frontend/test-backends/`: point
+`FOXYN_INSTALLER_BACKEND` at the absolute path of `hang.sh`,
+`large-response.sh` or `exit-immediately.sh`, then launch the app. In QEMU,
+the latter two produced the [large-response](docs/screenshots/qemu-backend-large.png)
+and [invalid-response](docs/screenshots/qemu-backend-exit.png) messages. These
+are single manual observations and do not establish behavior under every timing
+or failure condition.
