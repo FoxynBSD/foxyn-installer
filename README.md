@@ -83,9 +83,15 @@ and [invalid-response](docs/screenshots/qemu-backend-exit.png) messages. These
 are single manual observations and do not establish behavior under every timing
 or failure condition.
 
-On the same QEMU desktop, Tab moved focus visibly between
-[Check again](docs/screenshots/qemu-keyboard-refresh.png) and
+On the same QEMU desktop, an earlier version used Tab to move focus visibly
+between [Check again](docs/screenshots/qemu-keyboard-refresh.png) and
 [Quit](docs/screenshots/qemu-keyboard-quit.png). Space triggered a second
 backend invocation on Check again and closed the window on Quit. This covers
 only the current status window; the future installation flows and other
 accessibility needs remain untested.
+
+The findings area now scrolls. With `frontend/test-backends/many-findings.rb`,
+Tab and Space reached the [last of 20 findings](docs/screenshots/qemu-findings-last.png)
+using More and returned to the [first](docs/screenshots/qemu-findings-first.png)
+using Earlier. This was checked in the existing QEMU desktop; it does not
+validate screen-reader support or future installer flows.

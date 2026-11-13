@@ -8,8 +8,9 @@
 @interface InstallerController : NSObject <NSApplicationDelegate>
 {
   NSWindow *window;
-  NSTextField *status;
+  NSTextView *status;
   NSButton *refresh;
+  NSScrollView *findingsScroll;
 }
 - (void)refreshStatus:(id)sender;
 - (void)checkBackend:(NSString *)path;
@@ -33,21 +34,43 @@
   [[window contentView] addSubview:title];
   [title release];
 
-  status = [[NSTextField alloc] initWithFrame:NSMakeRect(24, 96, 572, 130)];
+  NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(24, 96, 572, 130)];
+  [scroll setHasVerticalScroller:YES];
+  [scroll setHasHorizontalScroller:NO];
+  [scroll setBorderType:NSBezelBorder];
+  status = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 550, 130)];
   [status setEditable:NO]; [status setSelectable:YES];
-  [status setBordered:NO]; [status setDrawsBackground:NO];
-  [status setStringValue:@"Checking installer availability…"];
-  [[window contentView] addSubview:status];
+  [status setVerticallyResizable:YES];
+  [status setHorizontallyResizable:NO];
+  [[status textContainer] setWidthTracksTextView:YES];
+  [status setFont:[NSFont systemFontOfSize:[NSFont systemFontSize]]];
+  [status setString:@"Checking installer availability…"];
+  [scroll setDocumentView:status];
+  findingsScroll = scroll;
+  [[window contentView] addSubview:scroll];
+  [scroll release];
 
-  refresh = [[NSButton alloc] initWithFrame:NSMakeRect(24, 25, 160, 40)];
+  refresh = [[NSButton alloc] initWithFrame:NSMakeRect(24, 25, 128, 40)];
   [refresh setTitle:@"Check again"]; [refresh setTarget:self];
   [refresh setAction:@selector(refreshStatus:)];
   [[window contentView] addSubview:refresh];
 
-  NSButton *quit = [[NSButton alloc] initWithFrame:NSMakeRect(436, 25, 160, 40)];
+  NSButton *quit = [[NSButton alloc] initWithFrame:NSMakeRect(468, 25, 128, 40)];
   [quit setTitle:@"Quit"]; [quit setTarget:NSApp]; [quit setAction:@selector(terminate:)];
   [[window contentView] addSubview:quit];
-  [refresh setNextKeyView:quit];
+  NSButton *earlier = [[NSButton alloc] initWithFrame:NSMakeRect(172, 25, 128, 40)];
+  [earlier setTitle:@"Earlier"]; [earlier setTarget:findingsScroll];
+  [earlier setAction:@selector(pageUp:)];
+  [[window contentView] addSubview:earlier];
+  NSButton *more = [[NSButton alloc] initWithFrame:NSMakeRect(320, 25, 128, 40)];
+  [more setTitle:@"More"]; [more setTarget:findingsScroll];
+  [more setAction:@selector(pageDown:)];
+  [[window contentView] addSubview:more];
+  [refresh setNextKeyView:status];
+  [status setNextKeyView:earlier];
+  [earlier setNextKeyView:more];
+  [more setNextKeyView:quit];
+  [earlier release]; [more release];
   [quit setNextKeyView:refresh];
   [window setInitialFirstResponder:refresh];
   [quit release];
@@ -68,17 +91,17 @@ static double monotonicSeconds(void)
 {
   NSString *path = [[[NSProcessInfo processInfo] environment] objectForKey:@"FOXYN_INSTALLER_BACKEND"];
   if (![path isAbsolutePath] || ![[NSFileManager defaultManager] isExecutableFileAtPath:path]) {
-    [status setStringValue:@"The installer backend is unavailable.\n\nInstallation cannot start."];
+    [status setString:@"The installer backend is unavailable.\n\nInstallation cannot start."];
     return;
   }
   [refresh setEnabled:NO];
-  [status setStringValue:@"Checking installer availability…"];
+  [status setString:@"Checking installer availability…"];
   [NSThread detachNewThreadSelector:@selector(checkBackend:) toTarget:self withObject:path];
 }
 
 - (void)showResult:(NSString *)message
 {
-  [status setStringValue:message];
+  [status setString:message];
   [refresh setEnabled:YES];
 }
 
