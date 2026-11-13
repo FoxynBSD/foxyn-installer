@@ -22,6 +22,7 @@ jobs:
           for file in lib/foxyn_installer/*.rb test/*_test.rb; do ruby -c "$file"; done
       - name: Run backend tests
         run: |
+          ruby test/system_copy_test.rb
           ruby test/command_test.rb
           ruby test/service_test.rb
           ruby test/disks_test.rb
