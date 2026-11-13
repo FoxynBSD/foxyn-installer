@@ -77,3 +77,49 @@ installation and reboot tests.
 ## License
 
 BSD 2-Clause; see [LICENSE](LICENSE).
+
+## Experimental GNUstep frontend
+
+`frontend/` contains an initial status window. It is not an installer wizard:
+it displays the backend's hardware findings and has no installation action.
+It requires the session's GNUstep GUI and an absolute backend path:
+
+```sh
+. /System/Library/Makefiles/GNUstep.sh
+cd frontend && gmake
+FOXYN_INSTALLER_BACKEND=/absolute/path/to/bin/foxyn-installer-backend \
+  openapp FoxynInstaller.app
+```
+
+The backend runs with the frontend's privileges. No privilege boundary or
+installation operations are implemented yet. Hardware checks can be incomplete
+or unavailable to an unprivileged user. Do not use this prototype for an
+installation.
+
+In an existing FoxynBSD QEMU desktop with Eau, the window was built with
+GNUstep Make and displayed both the backend's blocking finding and the error
+for a missing backend ([blocked](docs/screenshots/qemu-backend-blocked.png),
+[unavailable](docs/screenshots/qemu-backend-unavailable.png)). This does not validate an installation. Backend queries run on a worker thread with a five-second deadline and a
+64 KiB response limit. A deliberately unresponsive backend produced the
+[timeout message](docs/screenshots/qemu-backend-timeout.png) in QEMU. More error-path and privilege-boundary testing is required before use.
+
+Manual backend error probes are in `frontend/test-backends/`: point
+`FOXYN_INSTALLER_BACKEND` at the absolute path of `hang.sh`,
+`large-response.sh` or `exit-immediately.sh`, then launch the app. In QEMU,
+the latter two produced the [large-response](docs/screenshots/qemu-backend-large.png)
+and [invalid-response](docs/screenshots/qemu-backend-exit.png) messages. These
+are single manual observations and do not establish behavior under every timing
+or failure condition.
+
+On the same QEMU desktop, an earlier version used Tab to move focus visibly
+between [Check again](docs/screenshots/qemu-keyboard-refresh.png) and
+[Quit](docs/screenshots/qemu-keyboard-quit.png). Space triggered a second
+backend invocation on Check again and closed the window on Quit. This covers
+only the current status window; the future installation flows and other
+accessibility needs remain untested.
+
+The findings area now scrolls. With `frontend/test-backends/many-findings.rb`,
+Tab and Space reached the [last of 20 findings](docs/screenshots/qemu-findings-last.png)
+using More and returned to the [first](docs/screenshots/qemu-findings-first.png)
+using Earlier. This was checked in the existing QEMU desktop; it does not
+validate screen-reader support or future installer flows.
