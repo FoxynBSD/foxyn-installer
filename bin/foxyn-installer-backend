@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require_relative '../lib/foxyn_installer/service'
+
+service = FoxynInstaller::Service.new
+STDIN.each_line do |line|
+  begin
+    request = JSON.parse(line)
+    response = service.call(request)
+  rescue JSON::ParserError
+    response = { 'version' => 1, 'id' => nil,
+                 'error' => { 'code' => 'invalid_json', 'message' => 'Invalid JSON request.' } }
+  end
+  STDOUT.puts(JSON.generate(response))
+  STDOUT.flush
+end
