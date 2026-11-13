@@ -10,8 +10,11 @@ module FoxynInstaller
 
     def call(*argv)
       reader, writer = IO.pipe
+      # A request worker has its own process group.  Keep probes in it so the
+      # server can terminate the entire request on deadline.
+      in_worker = Thread.current[:foxyn_request_worker] == true
       pid = Process.spawn(*argv, in: File::NULL, out: writer, err: File::NULL,
-                          pgroup: true, close_others: true)
+                          pgroup: !in_worker, close_others: true)
       writer.close
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
       output = +''.b
@@ -44,7 +47,7 @@ module FoxynInstaller
       reader&.close unless reader&.closed?
       if pid && !status
         begin
-          Process.kill('KILL', -pid)
+          Process.kill('KILL', in_worker ? pid : -pid)
         rescue Errno::ESRCH
           # The process may have just exited.
         end

@@ -10,9 +10,11 @@ module FoxynInstaller
     MAX_REQUEST = 16_384
     MAX_RESPONSE = 65_536
     TIMEOUT = 5.0
+    SERVICE_TIMEOUT = 3.5
 
-    def initialize(service:, authorized_uid:, peer_uid: nil)
+    def initialize(service:, authorized_uid:, peer_uid: nil, service_timeout: SERVICE_TIMEOUT)
       @service = service
+      @service_timeout = service_timeout
       @authorized_uid = authorized_uid
       @peer_uid = peer_uid || ->(socket) { socket.getpeereid.first }
     end
@@ -26,7 +28,7 @@ module FoxynInstaller
       data = read_line(socket, deadline)
       request = JSON.parse(data)
       response = if request.is_a?(Hash) && ALLOWED.include?(request['operation'])
-                   @service.call(request)
+                   service_response(request, deadline)
                  else
                    { 'version' => 1, 'id' => request.is_a?(Hash) ? request['id'] : nil,
                      'error' => { 'code' => 'operation_unavailable',
@@ -48,6 +50,54 @@ module FoxynInstaller
     class TimeoutError < StandardError; end
 
     private
+
+    # Execute the read-only request in a separate session so a stuck probe
+    # cannot prevent the privileged listener from accepting later requests.
+    def service_response(request, connection_deadline)
+      reader, writer = IO.pipe
+      pid = fork do
+        reader.close
+        begin
+          Process.setsid
+          Thread.current[:foxyn_request_worker] = true
+          result = @service.call(request)
+          output = JSON.generate(result)
+          output = JSON.generate('error' => { 'code' => 'response_too_large' }) if output.bytesize > MAX_RESPONSE - 1
+          writer.write(output)
+        rescue StandardError
+          writer.write(JSON.generate('error' => { 'code' => 'service_failed' })) rescue nil
+        ensure
+          writer.close
+        end
+        exit! 0
+      end
+      writer.close
+      worker_deadline = [connection_deadline - 0.3,
+                         Process.clock_gettime(Process::CLOCK_MONOTONIC) + @service_timeout].min
+      data = +''
+      loop do
+        wait = worker_deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        return { 'error' => { 'code' => 'service_timeout' } } if wait <= 0
+        next unless IO.select([reader], nil, nil, wait)
+        part = reader.read_nonblock(4096, exception: false)
+        next if part == :wait_readable
+        break if part.nil?
+        data << part
+        return { 'error' => { 'code' => 'response_too_large' } } if data.bytesize > MAX_RESPONSE - 1
+      end
+      JSON.parse(data)
+    rescue JSON::ParserError, IOError, SystemCallError
+      { 'error' => { 'code' => 'service_failed' } }
+    ensure
+      writer&.close unless writer&.closed?
+      reader&.close unless reader&.closed?
+      if pid
+        # The worker may not have reached setsid yet, so also signal it by PID.
+        begin; Process.kill('KILL', -pid); rescue Errno::ESRCH; end
+        begin; Process.kill('KILL', pid); rescue Errno::ESRCH; end
+        begin; Process.detach(pid); rescue Errno::ECHILD; end
+      end
+    end
 
     def remaining(deadline)
       seconds = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
