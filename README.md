@@ -72,6 +72,7 @@ In an existing FoxynBSD QEMU desktop with Eau, the window was built with
 GNUstep Make and displayed both the backend's blocking finding and the error
 for a missing backend ([blocked](docs/screenshots/qemu-backend-blocked.png),
 [unavailable](docs/screenshots/qemu-backend-unavailable.png)). This does not
-validate keyboard navigation or an installation. The prototype calls the
-backend synchronously, so an unresponsive backend can freeze the window; it
-needs asynchronous execution, timeout and bounded responses before production.
+validate keyboard navigation or an installation. Backend queries run on a worker thread with a five-second deadline and a
+64 KiB response limit. A deliberately unresponsive backend produced the
+[timeout message](docs/screenshots/qemu-backend-timeout.png) in QEMU. More
+error-path, keyboard and privilege-boundary testing is required before use.

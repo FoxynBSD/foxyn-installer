@@ -1,4 +1,9 @@
 #import <AppKit/AppKit.h>
+#include <poll.h>
+#include <signal.h>
+#include <time.h>
+#include <unistd.h>
+#include <errno.h>
 
 @interface InstallerController : NSObject <NSApplicationDelegate>
 {
@@ -7,6 +12,8 @@
   NSButton *refresh;
 }
 - (void)refreshStatus:(id)sender;
+- (void)checkBackend:(NSString *)path;
+- (void)showResult:(NSString *)message;
 @end
 
 @implementation InstallerController
@@ -46,6 +53,13 @@
   [self refreshStatus:nil];
 }
 
+static double monotonicSeconds(void)
+{
+  struct timespec now;
+  if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) return 0;
+  return now.tv_sec + now.tv_nsec / 1000000000.0;
+}
+
 - (void)refreshStatus:(id)sender
 {
   NSString *path = [[[NSProcessInfo processInfo] environment] objectForKey:@"FOXYN_INSTALLER_BACKEND"];
@@ -53,38 +67,82 @@
     [status setStringValue:@"The installer backend is unavailable.\n\nInstallation cannot start."];
     return;
   }
+  [refresh setEnabled:NO];
+  [status setStringValue:@"Checking installer availability…"];
+  [NSThread detachNewThreadSelector:@selector(checkBackend:) toTarget:self withObject:path];
+}
+
+- (void)showResult:(NSString *)message
+{
+  [status setStringValue:message];
+  [refresh setEnabled:YES];
+}
+
+- (void)checkBackend:(NSString *)path
+{
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  NSString *message = @"The installer backend returned an invalid response.\n\nInstallation cannot start.";
   NSPipe *input = [NSPipe pipe];
   NSPipe *output = [NSPipe pipe];
   NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:path];
-  [task setStandardInput:input];
-  [task setStandardOutput:output];
-  [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
+  BOOL launched = NO;
+  BOOL timedOut = NO;
+  BOOL tooLarge = NO;
   @try {
+    [task setLaunchPath:path];
+    [task setStandardInput:input];
+    [task setStandardOutput:output];
+    [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
     [task launch];
+    launched = YES;
     NSData *request = [@"{\"version\":1,\"id\":1,\"operation\":\"check-hardware\"}\n" dataUsingEncoding:NSUTF8StringEncoding];
     [[input fileHandleForWriting] writeData:request];
     [[input fileHandleForWriting] closeFile];
-    NSData *response = [[output fileHandleForReading] readDataToEndOfFile];
-    [task waitUntilExit];
-    NSError *error = nil;
-    id json = [NSJSONSerialization JSONObjectWithData:response options:0 error:&error];
-    id result = [json isKindOfClass:[NSDictionary class]] ? [json objectForKey:@"result"] : nil;
-    id findings = [result isKindOfClass:[NSDictionary class]] ? [result objectForKey:@"findings"] : nil;
-    if ([task terminationStatus] != 0 || ![findings isKindOfClass:[NSArray class]]) {
-      [status setStringValue:@"The installer backend returned an invalid response.\n\nInstallation cannot start."];
-    } else {
-      NSMutableString *message = [NSMutableString stringWithString:@"Installation is not available yet.\n\n"];
-      for (id finding in findings) {
-        id text = [finding isKindOfClass:[NSDictionary class]] ? [finding objectForKey:@"message"] : nil;
-        if ([text isKindOfClass:[NSString class]]) [message appendFormat:@"• %@\n", text];
+    NSMutableData *response = [NSMutableData data];
+    int fd = [[output fileHandleForReading] fileDescriptor];
+    BOOL eof = NO;
+    double deadline = monotonicSeconds() + 5.0;
+    while (!eof || [task isRunning]) {
+      if (monotonicSeconds() >= deadline) { timedOut = YES; break; }
+      if (eof) { usleep(20000); continue; }
+      struct pollfd descriptor = { fd, POLLIN | POLLHUP, 0 };
+      int ready = poll(&descriptor, 1, 100);
+      if (ready < 0) { if (errno == EINTR) continue; break; }
+      if (ready == 0) continue;
+      if (descriptor.revents & (POLLIN | POLLHUP)) {
+        char buffer[4096];
+        ssize_t length = read(fd, buffer, sizeof(buffer));
+        if (length == 0) eof = YES;
+        else if (length < 0) { if (errno != EINTR) break; }
+        else if ([response length] + (NSUInteger)length > 65536) { tooLarge = YES; break; }
+        else [response appendBytes:buffer length:(NSUInteger)length];
+      } else if (descriptor.revents & (POLLERR | POLLNVAL)) break;
+    }
+    if (timedOut) message = @"The installer backend did not respond in time.\n\nInstallation cannot start.";
+    else if (tooLarge) message = @"The installer backend response was too large.\n\nInstallation cannot start.";
+    else if (eof && ![task isRunning] && [task terminationStatus] == 0) {
+      NSError *error = nil;
+      id json = [NSJSONSerialization JSONObjectWithData:response options:0 error:&error];
+      id result = [json isKindOfClass:[NSDictionary class]] ? [json objectForKey:@"result"] : nil;
+      id findings = [result isKindOfClass:[NSDictionary class]] ? [result objectForKey:@"findings"] : nil;
+      if ([findings isKindOfClass:[NSArray class]]) {
+        NSMutableString *text = [NSMutableString stringWithString:@"Installation is not available yet.\n\n"];
+        for (id finding in findings) {
+          id reason = [finding isKindOfClass:[NSDictionary class]] ? [finding objectForKey:@"message"] : nil;
+          if ([reason isKindOfClass:[NSString class]]) [text appendFormat:@"• %@\n", reason];
+        }
+        message = text;
       }
-      [status setStringValue:message];
     }
   } @catch (NSException *exception) {
-    [status setStringValue:@"The installer backend could not be started.\n\nInstallation cannot start."];
+    message = @"The installer backend could not be started or read.\n\nInstallation cannot start.";
+  } @finally {
+    if (launched && [task isRunning]) kill([task processIdentifier], SIGKILL);
+    if (launched) [task waitUntilExit];
   }
+  [self performSelectorOnMainThread:@selector(showResult:) withObject:message waitUntilDone:NO];
   [task release];
+  [pool drain];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)app { return YES; }
