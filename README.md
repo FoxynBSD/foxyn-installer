@@ -31,7 +31,9 @@ DragonFly, reporting unavailable values rather than guessing. It also records
 whether the kernel provides a nonempty EFI memory map. Its absence or a failed
 read remains unknown and is not classified as BIOS. It reports PCI devices
 shown as unattached by `pciconf`, including vendor and device IDs; a failed
-PCI inventory is distinguished from an empty result. These are
+PCI inventory is distinguished from an empty result. Network interface
+flags and any link status are recorded without addresses. They do not prove
+connectivity, and an unavailable interface inventory remains a blocker. These are
 observations, not a compatibility verdict: boot mode validation, CPU features, measured
 minimums, display, input, network and target-disk checks are still missing.
 The result remains incomplete and blocking. `install`

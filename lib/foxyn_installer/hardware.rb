@@ -21,6 +21,7 @@ module FoxynInstaller
       memory = memory_text&.match?(/\A[1-9]\d*\z/) ? memory_text.to_i : nil
       pci_output, pci_ok = @run.call('/usr/sbin/pciconf', '-l')
       pci_unattached, pci_malformed = unattached_pci(pci_ok ? pci_output : nil)
+      interfaces, network_errors = network_interfaces
       findings = [{ 'severity' => 'blocking', 'code' => 'hardware_check_incomplete',
                     'message' => 'Hardware compatibility has not been fully checked; installation is disabled.' }]
       if arch.nil? || arch.empty?
@@ -29,6 +30,10 @@ module FoxynInstaller
       elsif arch != 'x86_64'
         findings << { 'severity' => 'blocking', 'code' => 'unsupported_architecture',
                       'message' => "Architecture #{arch} is not supported by this installer." }
+      end
+      network_errors.each do |message|
+        findings << { 'severity' => 'blocking', 'code' => 'network_inventory_unavailable',
+                      'message' => message }
       end
       unless pci_ok
         findings << { 'severity' => 'blocking', 'code' => 'pci_inventory_unavailable',
@@ -50,11 +55,37 @@ module FoxynInstaller
       { 'verdict' => 'not supported', 'complete' => false,
         'observations' => { 'architecture' => arch, 'cpu_model' => model,
                             'physical_memory_bytes' => memory, 'boot_evidence' => boot_evidence,
-                            'unattached_pci' => pci_ok ? pci_unattached : nil },
+                            'unattached_pci' => pci_ok ? pci_unattached : nil, 'network_interfaces' => interfaces },
         'findings' => findings }
     end
 
     private
+
+    def network_interfaces
+      names, ok = @run.call('/sbin/ifconfig', '-l')
+      return [nil, ['Network interface inventory could not be read.']] unless ok
+
+      errors = []
+      interfaces = names.split.filter_map do |name|
+        unless name.match?(/\A[a-zA-Z][a-zA-Z0-9_.-]*\z/)
+          errors << 'An invalid network interface name was reported.'
+          next
+        end
+        output, success = @run.call('/sbin/ifconfig', name)
+        header = success && output.lines.first&.match(/\A#{Regexp.escape(name)}: flags=[0-9a-fA-F]+<([^>]*)>/)
+        unless header
+          errors << "Network interface #{name} could not be inspected."
+          next
+        end
+        flags = header[1].split(',')
+        status_line = output.lines.find { |line| line.match?(/\A\s+status:\s/) }
+        status = status_line&.strip&.sub(/\Astatus:\s*/, '')
+        { 'name' => name, 'loopback' => flags.include?('LOOPBACK'),
+          'up' => flags.include?('UP'), 'running' => flags.include?('RUNNING'),
+          'link_status' => status.nil? || status.empty? ? nil : status }
+      end
+      [interfaces, errors]
+    end
 
     def unattached_pci(output)
       return [[], false] unless output
