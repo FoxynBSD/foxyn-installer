@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'hardware'
+
 module FoxynInstaller
   # Protocol version 1 is intentionally read-only until the installer has
   # verified hardware detection, target discovery and an execution backend.
@@ -9,13 +11,17 @@ module FoxynInstaller
     FILESYSTEMS = %w[hammer2 ufs].freeze
     COMPONENTS = %w[base desktop].freeze
 
+    def initialize(hardware: Hardware.new)
+      @hardware = hardware
+    end
+
     def call(request)
       raise ArgumentError, 'request must be an object' unless request.is_a?(Hash)
       raise ArgumentError, 'unsupported protocol version' unless request['version'] == PROTOCOL_VERSION
 
       result = case request['operation']
                when 'capabilities' then capabilities
-               when 'check-hardware' then hardware
+               when 'check-hardware' then @hardware.check
                when 'plan' then plan(request['options'])
                when 'install' then install_unavailable
                else raise ArgumentError, 'unknown operation'
@@ -31,12 +37,6 @@ module FoxynInstaller
     def capabilities
       { 'operations' => %w[capabilities check-hardware plan install],
         'installation_available' => false, 'target_discovery_available' => false }
-    end
-
-    def hardware
-      { 'verdict' => 'not supported', 'complete' => false,
-        'findings' => [{ 'severity' => 'blocking', 'code' => 'hardware_check_unavailable',
-                         'message' => 'Hardware compatibility cannot yet be verified; installation is disabled.' }] }
     end
 
     def plan(options)
