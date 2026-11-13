@@ -6,8 +6,8 @@ See [FoxynBSD issue #16](https://github.com/FoxynBSD/FoxynBSD/issues/16).
 
 ## Current status
 
-This is an early, **read-only prototype**. It cannot discover disks, assess
-hardware, run an installation, or create a bootable system. The requested
+This is an early, **read-only prototype**. It can list some locally attached devices, but cannot assess
+hardware, verify a target, run an installation, or create a bootable system. The requested
 installer frontends and ISO integration do not yet exist. Do not use this as
 an installer. The backend reports the unavailable checks as blocking and
 always refuses `install`; a review is illustrative and its caller-supplied
@@ -19,12 +19,22 @@ Ruby and its standard JSON library are required. No gems are needed.
 
 ```sh
 ruby test/service_test.rb
+ruby test/disks_test.rb
 printf '%s\n' '{"version":1,"id":1,"operation":"capabilities"}' | bin/foxyn-installer-backend
 ```
 
 The backend reads one JSON request per line and emits one JSON response per
 line, keeping `id` for correlation. `version` is currently `1`. Supported
-operations are `capabilities`, `check-hardware`, `plan`, and `install`.
+operations are `capabilities`, `check-hardware`, `list-disks`, `plan`, and `install`.
+`list-disks` reads `kern.disks`, probes physical-looking devices using
+DragonFly's `diskinfo`, and compares device numbers with `/dev/serno` aliases.
+It reports size and serial when available. Model, bus and target safety are
+not established; access permissions and device support can prevent discovery.
+Memory and virtual `md`/`vn` devices are listed without opening them. This
+inventory may open other device nodes read-only and may cause their normal
+kernel probing. The output may contain sensitive serial numbers. It has been
+exercised on QEMU virtio disks, not physical hardware.
+
 `check-hardware` currently returns an incomplete, blocking result. `install`
 returns `accepted: false` and performs no changes.
 
