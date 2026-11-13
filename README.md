@@ -123,3 +123,10 @@ Tab and Space reached the [last of 20 findings](docs/screenshots/qemu-findings-l
 using More and returned to the [first](docs/screenshots/qemu-findings-first.png)
 using Earlier. This was checked in the existing QEMU desktop; it does not
 validate screen-reader support or future installer flows.
+
+The combined prototype's backend and frontend were exercised together on the
+existing FoxynBSD QEMU desktop. Its [unprivileged window](docs/screenshots/qemu-integrated-unprivileged.png)
+reported that the PCI inventory could not be read, alongside the overall
+hardware blocker. A supported privilege boundary for the real backend is
+still needed; this test did not grant additional privileges to the GUI.
+Run `ruby test/integration_test.rb` to check service routing with fixtures.
