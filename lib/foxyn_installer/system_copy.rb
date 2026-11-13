@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require 'open3'
+require 'find'
+require 'fileutils'
+require 'securerandom'
 
 module FoxynInstaller
   # Internal building block, not exposed by the installer protocol.  Its
@@ -45,10 +48,57 @@ module FoxynInstaller
         raise Error.new(name, "Copy of #{name} failed: #{error}") unless success
         progress&.call('directory' => name, 'state' => 'completed')
       end
+      restore_hardlinks(source, target, directories)
       { 'copied_directories' => directories }
     end
 
     private
+
+    # cpdup tracks hardlinks for one invocation.  Since directories are
+    # copied separately to include separately mounted /etc or /var, restore
+    # links whose source inode occurs in more than one invocation.
+    def restore_hardlinks(source, target, directories)
+      seen = {}
+      prefix = source.end_with?('/') ? source : source + '/'
+      directories.each do |name|
+        top = File.join(source, name)
+        source_device = File.lstat(top).dev
+        Find.find(top) do |path|
+          stat = File.lstat(path)
+          if stat.dev != source_device
+            Find.prune if stat.directory?
+            next
+          end
+          next unless stat.file? && stat.nlink > 1
+
+          relative = path.delete_prefix(prefix)
+          destination = File.join(target, relative)
+          copied = File.lstat(destination)
+          raise Error.new(name, "Copied hardlink is not a regular file: #{relative}") unless copied.file?
+
+          key = [stat.dev, stat.ino]
+          first = seen[key]
+          if first
+            next if File.identical?(first, destination)
+
+            unless FileUtils.compare_file(first, destination)
+              raise Error.new(name, "Copied hardlink contents differ: #{relative}")
+            end
+            temporary = File.join(File.dirname(destination), ".foxyn-link-#{SecureRandom.hex(16)}")
+            begin
+              File.link(first, temporary)
+              File.rename(temporary, destination)
+            ensure
+              File.unlink(temporary) if File.exist?(temporary)
+            end
+          else
+            seen[key] = destination
+          end
+        end
+      rescue SystemCallError => e
+        raise Error.new(name, "Could not preserve hardlinks in #{name}: #{e.message}")
+      end
+    end
 
     def run_cpdup(program, source, target)
       _out, error, status = Open3.capture3(program, '-i0', '-s0', '-q', source, target)

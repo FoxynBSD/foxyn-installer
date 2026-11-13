@@ -49,6 +49,32 @@ Dir.mktmpdir('foxyn-copy-test') do |tmp|
   File.symlink(empty, symlink)
   rejected { FoxynInstaller::SystemCopy.new(run: fail_on_etc).copy(source: source, target: symlink) }
 
+  File.link(File.join(source, 'bin', 'app'), File.join(source, 'etc', 'app-crosslink'))
+  FileUtils.rm_rf(target)
+  Dir.mkdir(target)
+  copy_fixture = lambda do |_program, src, dest|
+    FileUtils.cp_r(src, dest)
+    [true, '']
+  end
+  FoxynInstaller::SystemCopy.new(run: copy_fixture).copy(source: source, target: target)
+  assert(File.identical?(File.join(target, 'bin', 'app'), File.join(target, 'etc', 'app-crosslink')),
+         'cross-directory hardlink not restored')
+
+  FileUtils.rm_rf(target)
+  Dir.mkdir(target)
+  corrupt_fixture = lambda do |_program, src, dest|
+    FileUtils.cp_r(src, dest)
+    File.write(File.join(dest, 'app-crosslink'), 'different') if File.basename(src) == 'etc'
+    [true, '']
+  end
+  begin
+    FoxynInstaller::SystemCopy.new(run: corrupt_fixture).copy(source: source, target: target)
+    raise 'mismatched content accepted'
+  rescue FoxynInstaller::SystemCopy::Error => e
+    assert(e.message.include?('contents differ'), 'mismatched content not reported')
+  end
+  assert(File.read(File.join(target, 'etc', 'app-crosslink')) == 'different', 'mismatched data overwritten')
+
   if File.executable?('/bin/cpdup') && RUBY_PLATFORM.include?('dragonfly')
     FileUtils.rm_rf(target)
     Dir.mkdir(target)
@@ -61,6 +87,7 @@ Dir.mktmpdir('foxyn-copy-test') do |tmp|
     assert(File.read(app) == 'fixture', 'copied contents differ')
     assert(File.symlink?(File.join(target, 'bin', 'app-link')), 'symlink not preserved')
     assert(File.stat(app).ino == File.stat(File.join(target, 'bin', 'app-hardlink')).ino, 'hardlink not preserved')
+    assert(File.stat(app).ino == File.stat(File.join(target, 'etc', 'app-crosslink')).ino, 'cross-directory hardlink not preserved')
     assert((File.stat(app).mode & 0o777) == 0o755, 'executable mode not preserved')
     puts 'Real cpdup disposable-tree test passed'
   else

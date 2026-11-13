@@ -179,12 +179,16 @@ These checks do not establish safety for privileged installation operations.
 `SystemCopy` is an internal, unexposed building block for copying the system
 directories using `/bin/cpdup`. It requires an empty destination, rejects
 obvious overlapping trees, reports progress per directory and stops on a
-copy error. Its caller must control both trees and prevent concurrent path
+copy error. A subsequent scan restores cross-directory hardlinks after
+checking that copied contents match. Its caller must control both trees and
+prevent concurrent path
 replacement; it does not validate or mount a disk. No RPC invokes it.
 
 On the QEMU FoxynBSD guest, `test/system_copy_test.rb` copied only synthetic
-temporary files and checked their contents, mode, symlink and an intra-directory
-hardlink. It also checks an injected failure and unsafe paths. This does not
-verify full system copies, links across separately copied directories, disk
-failures, cancellation, bounded output or installation/reboot. Those and the
+temporary files and checked their contents, mode, symlink and hardlinks both
+within and across copied directories. A fixture verifies that mismatched
+copies are not overwritten when links are restored. Tests also cover an
+injected failure and unsafe paths. This does not verify full system copies,
+separately mounted source directories, disk failures, cancellation, bounded
+output or installation/reboot. Those and the
 target authorization remain necessary before connecting it to the installer.
