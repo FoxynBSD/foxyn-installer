@@ -1,0 +1,27 @@
+name: Installer tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ruby-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check Ruby version
+        run: ruby --version
+      - name: Check Ruby syntax
+        run: |
+          ruby -c bin/foxyn-installer-backend
+          for file in lib/foxyn_installer/*.rb test/*_test.rb; do ruby -c "$file"; done
+      - name: Run backend tests
+        run: |
+          ruby test/service_test.rb
+          ruby test/disks_test.rb
+          ruby test/hardware_test.rb
+          ruby test/integration_test.rb

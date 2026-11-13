@@ -21,6 +21,7 @@ Ruby and its standard JSON library are required. No gems are needed.
 ruby test/service_test.rb
 ruby test/disks_test.rb
 ruby test/hardware_test.rb
+ruby test/integration_test.rb
 printf '%s\n' '{"version":1,"id":1,"operation":"capabilities"}' | bin/foxyn-installer-backend
 ```
 
@@ -130,3 +131,7 @@ reported that the PCI inventory could not be read, alongside the overall
 hardware blocker. A supported privilege boundary for the real backend is
 still needed; this test did not grant additional privileges to the GUI.
 Run `ruby test/integration_test.rb` to check service routing with fixtures.
+
+The GitHub Actions workflow runs the Ruby syntax and fixture tests on Linux.
+It does not compile GNUstep or test DragonFly devices, a QEMU desktop, or an
+installation; those checks remain separate.
