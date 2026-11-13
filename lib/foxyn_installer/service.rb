@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'disks'
+
 module FoxynInstaller
   # Protocol version 1 is intentionally read-only until the installer has
   # verified hardware detection, target discovery and an execution backend.
@@ -9,6 +11,10 @@ module FoxynInstaller
     FILESYSTEMS = %w[hammer2 ufs].freeze
     COMPONENTS = %w[base desktop].freeze
 
+    def initialize(disks: Disks.new)
+      @disks = disks
+    end
+
     def call(request)
       raise ArgumentError, 'request must be an object' unless request.is_a?(Hash)
       raise ArgumentError, 'unsupported protocol version' unless request['version'] == PROTOCOL_VERSION
@@ -16,11 +22,15 @@ module FoxynInstaller
       result = case request['operation']
                when 'capabilities' then capabilities
                when 'check-hardware' then hardware
+               when 'list-disks' then @disks.list
                when 'plan' then plan(request['options'])
                when 'install' then install_unavailable
                else raise ArgumentError, 'unknown operation'
                end
       { 'version' => PROTOCOL_VERSION, 'id' => request['id'], 'result' => result }
+    rescue RuntimeError => e
+      { 'version' => PROTOCOL_VERSION, 'id' => request.is_a?(Hash) ? request['id'] : nil,
+        'error' => { 'code' => 'discovery_failed', 'message' => e.message } }
     rescue ArgumentError => e
       { 'version' => PROTOCOL_VERSION, 'id' => request.is_a?(Hash) ? request['id'] : nil,
         'error' => { 'code' => 'invalid_request', 'message' => e.message } }
@@ -29,8 +39,9 @@ module FoxynInstaller
     private
 
     def capabilities
-      { 'operations' => %w[capabilities check-hardware plan install],
-        'installation_available' => false, 'target_discovery_available' => false }
+      { 'operations' => %w[capabilities check-hardware list-disks plan install],
+        'installation_available' => false, 'disk_inventory_available' => true, 'target_discovery_available' => false,
+        'target_safety_checked' => false }
     end
 
     def hardware
