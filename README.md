@@ -135,3 +135,10 @@ Run `ruby test/integration_test.rb` to check service routing with fixtures.
 The GitHub Actions workflow runs the Ruby syntax and fixture tests on Linux.
 It does not compile GNUstep or test DragonFly devices, a QEMU desktop, or an
 installation; those checks remain separate.
+
+On a writable FoxynBSD test system, `test/foxyn-smoke.sh` runs the backend
+checks and verifies that hardware remains incomplete and installation is
+refused. `test/foxyn-smoke.sh --build-gui` also compiles the GNUstep window.
+The smoke test inventories devices but never calls an installation operation
+that writes; device probing has the limitations described above. It does not
+launch the GUI or test a live ISO or installed system.

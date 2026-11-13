@@ -17,6 +17,7 @@ jobs:
         run: ruby --version
       - name: Check Ruby syntax
         run: |
+          sh -n test/foxyn-smoke.sh
           ruby -c bin/foxyn-installer-backend
           for file in lib/foxyn_installer/*.rb test/*_test.rb; do ruby -c "$file"; done
       - name: Run backend tests
