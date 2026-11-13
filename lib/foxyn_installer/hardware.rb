@@ -16,6 +16,8 @@ module FoxynInstaller
       arch = read('/sbin/sysctl', '-n', 'hw.machine')
       model = read('/sbin/sysctl', '-n', 'hw.model')
       memory_text = read('/sbin/sysctl', '-n', 'hw.physmem')
+      efi_map, efi_ok = @run.call('/sbin/sysctl', '-b', 'machdep.efi_map')
+      boot_evidence = efi_ok && !efi_map.empty? ? 'efi_memory_map_present' : 'unknown'
       memory = memory_text&.match?(/\A[1-9]\d*\z/) ? memory_text.to_i : nil
       findings = [{ 'severity' => 'blocking', 'code' => 'hardware_check_incomplete',
                     'message' => 'Hardware compatibility has not been fully checked; installation is disabled.' }]
@@ -31,7 +33,8 @@ module FoxynInstaller
                       'message' => 'Physical memory could not be read.' }
       end
       { 'verdict' => 'not supported', 'complete' => false,
-        'observations' => { 'architecture' => arch, 'cpu_model' => model, 'physical_memory_bytes' => memory },
+        'observations' => { 'architecture' => arch, 'cpu_model' => model,
+                            'physical_memory_bytes' => memory, 'boot_evidence' => boot_evidence },
         'findings' => findings }
     end
 

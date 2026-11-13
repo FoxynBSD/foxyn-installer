@@ -27,8 +27,10 @@ The backend reads one JSON request per line and emits one JSON response per
 line, keeping `id` for correlation. `version` is currently `1`. Supported
 operations are `capabilities`, `check-hardware`, `plan`, and `install`.
 `check-hardware` reads the architecture, CPU model and physical memory on
-DragonFly, reporting unavailable values rather than guessing. These are
-observations, not a compatibility verdict: boot mode, CPU features, measured
+DragonFly, reporting unavailable values rather than guessing. It also records
+whether the kernel provides a nonempty EFI memory map. Its absence or a failed
+read remains unknown and is not classified as BIOS. These are
+observations, not a compatibility verdict: boot mode validation, CPU features, measured
 minimums, display, input, network and target-disk checks are still missing.
 The result remains incomplete and blocking. `install`
 returns `accepted: false` and performs no changes.

@@ -14,11 +14,13 @@ base = {
   ['/usr/bin/uname', '-s'] => ["DragonFly\n", true],
   ['/sbin/sysctl', '-n', 'hw.machine'] => ["x86_64\n", true],
   ['/sbin/sysctl', '-n', 'hw.model'] => ["QEMU CPU\n", true],
-  ['/sbin/sysctl', '-n', 'hw.physmem'] => ["4294967296\n", true]
+  ['/sbin/sysctl', '-n', 'hw.physmem'] => ["4294967296\n", true],
+  ['/sbin/sysctl', '-b', 'machdep.efi_map'] => ["\x00\x01".b, true]
 }
 result = FoxynInstaller::Hardware.new(run: run_with(base)).check
 check(result['observations']['physical_memory_bytes'] == 4_294_967_296, 'bad memory')
 check(result['observations']['architecture'] == 'x86_64', 'bad architecture')
+check(result['observations']['boot_evidence'] == 'efi_memory_map_present', 'EFI map evidence missing')
 check(result['complete'] == false && result['verdict'] == 'not supported', 'must fail closed')
 check(result['findings'].any? { |f| f['severity'] == 'blocking' }, 'missing blocker')
 
@@ -33,6 +35,10 @@ check(result['observations']['physical_memory_bytes'].nil?, 'invalid memory retu
 missing = base.merge(['/sbin/sysctl', '-n', 'hw.machine'] => ['', false])
 result = FoxynInstaller::Hardware.new(run: run_with(missing)).check
 check(result['findings'].any? { |f| f['code'] == 'architecture_unavailable' }, 'missing architecture accepted')
+
+empty_map = base.merge(['/sbin/sysctl', '-b', 'machdep.efi_map'] => ['', true])
+result = FoxynInstaller::Hardware.new(run: run_with(empty_map)).check
+check(result['observations']['boot_evidence'] == 'unknown', 'missing EFI map must remain unknown')
 
 linux = base.merge(['/usr/bin/uname', '-s'] => ["Linux\n", true])
 result = FoxynInstaller::Hardware.new(run: run_with(linux)).check
