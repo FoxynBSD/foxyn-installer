@@ -19,6 +19,8 @@ module FoxynInstaller
       efi_map, efi_ok = @run.call('/sbin/sysctl', '-b', 'machdep.efi_map')
       boot_evidence = efi_ok && !efi_map.empty? ? 'efi_memory_map_present' : 'unknown'
       memory = memory_text&.match?(/\A[1-9]\d*\z/) ? memory_text.to_i : nil
+      pci_output, pci_ok = @run.call('/usr/sbin/pciconf', '-l')
+      pci_unattached, pci_malformed = unattached_pci(pci_ok ? pci_output : nil)
       findings = [{ 'severity' => 'blocking', 'code' => 'hardware_check_incomplete',
                     'message' => 'Hardware compatibility has not been fully checked; installation is disabled.' }]
       if arch.nil? || arch.empty?
@@ -28,17 +30,49 @@ module FoxynInstaller
         findings << { 'severity' => 'blocking', 'code' => 'unsupported_architecture',
                       'message' => "Architecture #{arch} is not supported by this installer." }
       end
+      unless pci_ok
+        findings << { 'severity' => 'blocking', 'code' => 'pci_inventory_unavailable',
+                      'message' => 'PCI device inventory could not be read.' }
+      end
+      if pci_malformed
+        findings << { 'severity' => 'blocking', 'code' => 'pci_inventory_unparsed',
+                      'message' => 'An unattached PCI device could not be identified.' }
+      end
+      pci_unattached.each do |device|
+        findings << { 'severity' => 'warning', 'code' => 'pci_driver_missing',
+                      'message' => "No driver is attached to #{device['location']} " \
+                                   "(#{device['vendor_id']}:#{device['device_id']})." }
+      end
       if memory.nil?
         findings << { 'severity' => 'blocking', 'code' => 'memory_unavailable',
                       'message' => 'Physical memory could not be read.' }
       end
       { 'verdict' => 'not supported', 'complete' => false,
         'observations' => { 'architecture' => arch, 'cpu_model' => model,
-                            'physical_memory_bytes' => memory, 'boot_evidence' => boot_evidence },
+                            'physical_memory_bytes' => memory, 'boot_evidence' => boot_evidence,
+                            'unattached_pci' => pci_ok ? pci_unattached : nil },
         'findings' => findings }
     end
 
     private
+
+    def unattached_pci(output)
+      return [[], false] unless output
+
+      malformed = false
+      devices = output.lines.filter_map do |line|
+        next unless line.match?(/\Anone\d*@pci/)
+
+        match = line.match(/\Anone\d*@(pci\d+:\d+:\d+:\d+):\s+.*\bchip=0x([0-9a-fA-F]{8})\b/)
+        unless match
+          malformed = true
+          next
+        end
+        chip = match[2].downcase
+        { 'location' => match[1], 'vendor_id' => chip[4, 4], 'device_id' => chip[0, 4] }
+      end
+      [devices, malformed]
+    end
 
     def unavailable(reason)
       { 'verdict' => 'not supported', 'complete' => false, 'observations' => {},
