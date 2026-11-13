@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'open3'
+require_relative 'command'
 
 module FoxynInstaller
   # Inventory only: results do not establish that a disk is safe to erase.
@@ -8,7 +8,7 @@ module FoxynInstaller
     DEVICE_NAME = /\A[a-zA-Z][a-zA-Z0-9_+-]*\z/
 
     def initialize(run: nil, serials: nil, matching_devices: nil)
-      @run = run || method(:run_command)
+      @run = run || Command.new.method(:call)
       @serials = serials || method(:serial_aliases)
       @matching_devices = matching_devices || method(:matching_devices)
     end
@@ -67,12 +67,6 @@ module FoxynInstaller
       warnings
     end
 
-    def run_command(*argv)
-      out, _err, status = Open3.capture3(*argv)
-      [out, status.success?]
-    rescue SystemCallError
-      ['', false]
-    end
 
     # Match already-present device nodes only; never open the nodes.  This
     # records positive evidence, not proof that other disks are unused.

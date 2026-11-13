@@ -10,6 +10,7 @@ esac
 [ "$(uname -s)" = DragonFly ] || { echo 'requires DragonFly/FoxynBSD' >&2; exit 1; }
 cd "$(dirname "$0")/.."
 
+ruby test/command_test.rb
 ruby test/service_test.rb
 ruby test/disks_test.rb
 ruby test/hardware_test.rb

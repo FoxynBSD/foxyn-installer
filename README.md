@@ -18,6 +18,7 @@ target identity is not verified.
 Ruby and its standard JSON library are required. No gems are needed.
 
 ```sh
+ruby test/command_test.rb
 ruby test/service_test.rb
 ruby test/disks_test.rb
 ruby test/hardware_test.rb
@@ -157,8 +158,8 @@ root peer credential; it reads `FOXYN_INSTALLER_SOCKET` and can be used as
 
 This is not a production privilege boundary. The daemon must only be run from
 root-owned, non-user-writable files and a sanitized environment. It has no
-service integration, security review or durable startup/cleanup design; a
-blocked system probe may stall it. It must not be made setuid or exposed to
+service integration, security review or durable startup/cleanup design; each external system probe has a five-second deadline and a 1 MiB output
+limit. The overall request can still take longer when several probes run. It must not be made setuid or exposed to
 untrusted users. Disk inventory may trigger kernel probing as described above.
 In a disposable QEMU guest, a manually started daemon let the authorized
 user query PCI details, denied another user, and refused an install request.

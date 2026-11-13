@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-require 'open3'
+require_relative 'command'
 
 module FoxynInstaller
   # Observations are deliberately separate from compatibility decisions.
   class Hardware
     def initialize(run: nil)
-      @run = run || method(:run_command)
+      @run = run || Command.new.method(:call)
     end
 
     def check
@@ -115,11 +115,5 @@ module FoxynInstaller
       ok ? output.strip : nil
     end
 
-    def run_command(*argv)
-      output, _error, status = Open3.capture3(*argv)
-      [output, status.success?]
-    rescue SystemCallError
-      ['', false]
-    end
   end
 end
