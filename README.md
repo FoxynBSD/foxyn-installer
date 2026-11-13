@@ -6,9 +6,11 @@ See [FoxynBSD issue #16](https://github.com/FoxynBSD/FoxynBSD/issues/16).
 
 ## Current status
 
-This is an early, **read-only prototype**. It can list some locally attached devices, but cannot assess
-hardware, verify a target, run an installation, or create a bootable system. The requested
-installer frontends and ISO integration do not yet exist. Do not use this as
+This is an early prototype. Its exposed protocol is read-only and can list
+some locally attached devices, but cannot assess hardware, verify a target,
+run an installation, or create a bootable system. An internal copy operation
+is testable on disposable trees but is not exposed by the protocol. The
+installer workflows and ISO integration do not yet exist. Do not use this as
 an installer. The backend reports the unavailable checks as blocking and
 always refuses `install`; a review is illustrative and its caller-supplied
 target identity is not verified.
@@ -71,9 +73,10 @@ created. Actual execution must discover the device independently, bind the
 review and confirmation to its identity, recheck it immediately before any
 write, and reject busy/live media and unsafe configurations.
 
-The wire protocol and the model may change before a stable release. No
-privileged service, authentication boundary, executable installation steps,
-logging or recovery mechanism has been implemented. Future work also includes
+The wire protocol and the model may change before a stable release. The
+read-only service and system-copy building block described below are
+experimental; no production privilege boundary, end-to-end installation,
+installation logging or recovery mechanism has been implemented. Future work also includes
 hardware compatibility data based on measured results, both GUI flows,
 keyboard access, failure handling, disposable-target tests and end-to-end
 installation and reboot tests.
@@ -95,8 +98,9 @@ FOXYN_INSTALLER_BACKEND=/absolute/path/to/bin/foxyn-installer-backend \
   openapp FoxynInstaller.app
 ```
 
-The backend runs with the frontend's privileges. No privilege boundary or
-installation operations are implemented yet. Hardware checks can be incomplete
+In the command above the backend runs with the frontend's privileges. An
+experimental read-only service is described below; no privilege boundary for
+installation operations is implemented. Hardware checks can be incomplete
 or unavailable to an unprivileged user. Do not use this prototype for an
 installation.
 
@@ -159,9 +163,11 @@ root peer credential; it reads `FOXYN_INSTALLER_SOCKET` and can be used as
 
 This is not a production privilege boundary. The daemon must only be run from
 root-owned, non-user-writable files and a sanitized environment. It has no
-service integration, security review or durable startup/cleanup design; each external system probe has a five-second deadline and a 1 MiB output
+service integration, security review or durable startup/cleanup design. Each
+external system probe has a five-second deadline and a 1 MiB output
 limit. Each service request also runs in a separate process with a 3.5-second
-deadline; the server terminates its process group if the deadline expires. It must not be made setuid or exposed to
+deadline; the server attempts to terminate its process group on timeout. It
+must not be made setuid or exposed to
 untrusted users. Disk inventory may trigger kernel probing as described above.
 In a disposable QEMU guest, a manually started daemon let the authorized
 user query PCI details, denied another user, and refused an install request.
