@@ -47,8 +47,12 @@
   NSButton *quit = [[NSButton alloc] initWithFrame:NSMakeRect(436, 25, 160, 40)];
   [quit setTitle:@"Quit"]; [quit setTarget:NSApp]; [quit setAction:@selector(terminate:)];
   [[window contentView] addSubview:quit];
+  [refresh setNextKeyView:quit];
+  [quit setNextKeyView:refresh];
+  [window setInitialFirstResponder:refresh];
   [quit release];
   [window makeKeyAndOrderFront:nil];
+  [window makeFirstResponder:refresh];
   [NSApp activateIgnoringOtherApps:YES];
   [self refreshStatus:nil];
 }
