@@ -192,3 +192,16 @@ injected failure and unsafe paths. This does not verify full system copies,
 separately mounted source directories, disk failures, cancellation, bounded
 output or installation/reboot. Those and the
 target authorization remain necessary before connecting it to the installer.
+
+A separate QEMU run used an older FoxynBSD base root ISO (kernel build
+`961c22b04b`) as the source and a newly created 6 GiB virtio disk, formatted
+UFS, as the disposable destination. The root ISO was read-only, while `/etc`,
+`/var` and `/root` were separate tmpfs mounts. `SystemCopy` returned success
+for all nine listed directories; byte comparisons passed for `/bin/sh`,
+`/etc/rc.conf`, `/usr/bin/ruby` and `/boot/kernel/kernel`. The mounted copy
+used approximately 624 MiB and was unmounted before the VM shut down. The
+source scan found no hardlink pairs in that image, so this run adds no evidence
+about hardlink preservation. It did not copy a desktop installation, verify
+all files or metadata, configure a boot loader, install a user, or boot the
+copied disk. A first attempt using a separately hot-plugged USB disk timed out
+in `newfs`; it was detached, and the cause was not established.
