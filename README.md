@@ -28,8 +28,12 @@ line, keeping `id` for correlation. `version` is currently `1`. Supported
 operations are `capabilities`, `check-hardware`, `list-disks`, `plan`, and `install`.
 `list-disks` reads `kern.disks`, probes physical-looking devices using
 DragonFly's `diskinfo`, and compares device numbers with `/dev/serno` aliases.
-It reports size and serial when available. Model, bus and target safety are
-not established; access permissions and device support can prevent discovery.
+It reports size and serial when available. It also lists mounted filesystems
+and attempts to associate their source device numbers with already-present
+whole-disk and slice nodes. A match is evidence of a mounted disk, but an
+empty match is not proof a disk is unused: aliases, device layering, live
+media and busy but unmounted devices are not comprehensively resolved. Model,
+bus and target safety are not established; access permissions and device support can prevent discovery.
 Memory and virtual `md`/`vn` devices are listed without opening them. This
 inventory may open other device nodes read-only and may cause their normal
 kernel probing. The output may contain sensitive serial numbers. It has been

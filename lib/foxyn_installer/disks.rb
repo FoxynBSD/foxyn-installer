@@ -7,9 +7,10 @@ module FoxynInstaller
   class Disks
     DEVICE_NAME = /\A[a-zA-Z][a-zA-Z0-9_+-]*\z/
 
-    def initialize(run: nil, serials: nil)
+    def initialize(run: nil, serials: nil, matching_devices: nil)
       @run = run || method(:run_command)
       @serials = serials || method(:serial_aliases)
+      @matching_devices = matching_devices || method(:matching_devices)
     end
 
     def list
@@ -42,13 +43,24 @@ module FoxynInstaller
           'information_complete' => false,
           'warnings' => warnings(name, size, aliases) }
       end
-      { 'disks' => disks, 'target_safety_checked' => false }
+      mount_output, mount_ok = @run.call('/sbin/mount')
+      raise 'Could not read mounted filesystems.' unless mount_ok
+
+      mounts = mount_output.lines.map do |line|
+        match = line.chomp.match(/\A(.+?) on (.+?) \((.+)\)\z/)
+        raise 'Unrecognized mount output.' unless match
+
+        { 'source' => match[1], 'mountpoint' => match[2],
+          'matching_disks' => @matching_devices.call(match[1], disks.map { |d| d['device'] }) }
+      end
+      { 'disks' => disks, 'mounts' => mounts, 'mount_associations_complete' => false,
+        'target_safety_checked' => false }
     end
 
     private
 
     def warnings(name, size, aliases)
-      warnings = ['Model and bus are unavailable.', 'Mounted, live and busy devices have not been identified.']
+      warnings = ['Model and bus are unavailable.', 'Mount associations may be incomplete; live and busy devices are not identified.']
       warnings << 'Disk size is unavailable.' unless size && size.positive?
       warnings << (aliases.empty? ? 'Serial number is unavailable.' : 'Serial number is ambiguous.') unless aliases.length == 1
       warnings << 'Memory or virtual device; not assessed as an installation target.' if name.match?(/\A(?:md|vn)\d+\z/)
@@ -60,6 +72,28 @@ module FoxynInstaller
       [out, status.success?]
     rescue SystemCallError
       ['', false]
+    end
+
+    # Match already-present device nodes only; never open the nodes.  This
+    # records positive evidence, not proof that other disks are unused.
+    def matching_devices(source, disks)
+      return [] unless source.start_with?('/dev/')
+
+      source_stat = File.stat(source)
+      return [] unless source_stat.chardev?
+
+      disks.select do |disk|
+        candidates = [disk] + Dir.glob("#{disk}s[0-9]*")
+        candidates.any? do |path|
+          next false unless path == disk || path.match?(/\A#{Regexp.escape(disk)}s\d+[a-z]?\z/)
+          stat = File.stat(path)
+          stat.chardev? && stat.rdev == source_stat.rdev
+        rescue SystemCallError
+          false
+        end
+      end
+    rescue SystemCallError
+      []
     end
 
     def serial_aliases(device)
