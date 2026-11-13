@@ -20,6 +20,7 @@ target identity is not verified.
 Ruby and its standard JSON library are required. No gems are needed.
 
 ```sh
+ruby test/boot_configuration_test.rb
 ruby test/system_copy_test.rb
 ruby test/command_test.rb
 ruby test/service_test.rb
@@ -205,3 +206,20 @@ about hardlink preservation. It did not copy a desktop installation, verify
 all files or metadata, configure a boot loader, install a user, or boot the
 copied disk. A first attempt using a separately hot-plugged USB disk timed out
 in `newfs`; it was detached, and the cause was not established.
+
+## Internal boot-configuration experiment
+
+`BootConfiguration` is not exposed by the protocol. Given a trusted target
+tree with an already mounted ESP, it writes UFS or HAMMER2 `fstab` entries
+using distinct GPT slice UUIDs, creates matching loader configurations on
+the root and ESP, and removes the live root-write setting from `rc.conf`.
+It rejects malformed UUIDs, unsupported values, the running root path and
+symlink configuration paths. Files are replaced one at a time; an error can
+leave a partially updated target. The caller must control the target tree and
+prevent path races. No disk identity check, partitioning, ESP mount, EFI loader
+copy, durability guarantee or rollback is implemented by this operation.
+
+In QEMU, tests passed on a disposable copy of the older base image described
+above using fixture UUIDs and a directory in place of an ESP. The two loader
+files matched and the generated UFS `fstab` was inspected. The fixture UUIDs
+do not identify real GPT partitions, and the resulting disk was not booted.
