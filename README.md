@@ -49,3 +49,29 @@ installation and reboot tests.
 ## License
 
 BSD 2-Clause; see [LICENSE](LICENSE).
+
+## Experimental GNUstep frontend
+
+`frontend/` contains an initial status window. It is not an installer wizard:
+it displays the backend's hardware findings and has no installation action.
+It requires the session's GNUstep GUI and an absolute backend path:
+
+```sh
+. /System/Library/Makefiles/GNUstep.sh
+cd frontend && gmake
+FOXYN_INSTALLER_BACKEND=/absolute/path/to/bin/foxyn-installer-backend \
+  openapp FoxynInstaller.app
+```
+
+The backend runs with the frontend's privileges. No privilege boundary or
+installation operations are implemented yet. Hardware checks can be incomplete
+or unavailable to an unprivileged user. Do not use this prototype for an
+installation.
+
+In an existing FoxynBSD QEMU desktop with Eau, the window was built with
+GNUstep Make and displayed both the backend's blocking finding and the error
+for a missing backend ([blocked](docs/screenshots/qemu-backend-blocked.png),
+[unavailable](docs/screenshots/qemu-backend-unavailable.png)). This does not
+validate keyboard navigation or an installation. The prototype calls the
+backend synchronously, so an unresponsive backend can freeze the window; it
+needs asynchronous execution, timeout and bounded responses before production.
