@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'tmpdir'
+require 'socket'
+require_relative '../lib/foxyn_installer/service'
+require_relative '../lib/foxyn_installer/read_only_server'
+
+abort 'requires root on DragonFly/FoxynBSD' unless Process.euid.zero? && RUBY_PLATFORM.include?('dragonfly')
+abort 'usage: foxyn-installer-readonlyd AUTHORIZED_UID' unless ARGV.size == 1 && ARGV[0].match?(/\A[1-9]\d*\z/)
+uid = Integer(ARGV[0], 10)
+begin
+  require 'etc'
+  Etc.getpwuid(uid)
+rescue ArgumentError
+  abort 'authorized UID does not exist'
+end
+parent = File.lstat('/var/run')
+abort '/var/run is not a trusted root-owned directory' unless parent.directory? && parent.uid.zero? && (parent.mode & 0o022).zero?
+
+Dir.mktmpdir('foxyn-installer.', '/var/run') do |directory|
+  path = File.join(directory, 'backend.sock')
+  previous_umask = File.umask(0o077)
+  begin
+    listener = UNIXServer.new(path)
+  ensure
+    File.umask(previous_umask)
+  end
+  File.chown(uid, -1, path)
+  File.chmod(0o600, path)
+  File.chmod(0o711, directory)
+  server = FoxynInstaller::ReadOnlyServer.new(service: FoxynInstaller::Service.new, authorized_uid: uid)
+  $stdout.sync = true
+  puts path
+  trap('TERM') { exit }
+  trap('INT') { exit }
+  begin
+    loop { server.handle(listener.accept) }
+  ensure
+    listener.close
+    File.unlink(path) if File.socket?(path)
+  end
+end

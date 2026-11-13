@@ -18,7 +18,7 @@ jobs:
       - name: Check Ruby syntax
         run: |
           sh -n test/foxyn-smoke.sh
-          ruby -c bin/foxyn-installer-backend
+          for file in bin/foxyn-installer-*; do ruby -c "$file"; done
           for file in lib/foxyn_installer/*.rb test/*_test.rb; do ruby -c "$file"; done
       - name: Run backend tests
         run: |
@@ -26,3 +26,4 @@ jobs:
           ruby test/disks_test.rb
           ruby test/hardware_test.rb
           ruby test/integration_test.rb
+          ruby test/read_only_server_test.rb

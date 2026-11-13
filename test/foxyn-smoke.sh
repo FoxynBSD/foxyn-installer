@@ -14,6 +14,7 @@ ruby test/service_test.rb
 ruby test/disks_test.rb
 ruby test/hardware_test.rb
 ruby test/integration_test.rb
+ruby test/read_only_server_test.rb
 
 tmpdir=$(mktemp -d /tmp/foxyn-installer-smoke.XXXXXX)
 trap 'rm -rf "$tmpdir"' EXIT HUP INT TERM

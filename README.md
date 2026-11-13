@@ -22,6 +22,7 @@ ruby test/service_test.rb
 ruby test/disks_test.rb
 ruby test/hardware_test.rb
 ruby test/integration_test.rb
+ruby test/read_only_server_test.rb
 printf '%s\n' '{"version":1,"id":1,"operation":"capabilities"}' | bin/foxyn-installer-backend
 ```
 
@@ -142,3 +143,24 @@ refused. `test/foxyn-smoke.sh --build-gui` also compiles the GNUstep window.
 The smoke test inventories devices but never calls an installation operation
 that writes; device probing has the limitations described above. It does not
 launch the GUI or test a live ISO or installed system.
+
+## Experimental read-only privilege separation
+
+`foxyn-installer-readonlyd` is a prototype daemon intended to be started
+manually as root with one authorized numeric user ID. It creates a private
+root-controlled directory in `/var/run`, checks the connecting user's
+`getpeereid`, and exposes only capabilities, hardware observations, disk
+inventory and non-executable plans. Install requests are refused. The
+`foxyn-installer-readonly-client` verifies socket permissions and the server's
+root peer credential; it reads `FOXYN_INSTALLER_SOCKET` and can be used as
+`FOXYN_INSTALLER_BACKEND` for the status window.
+
+This is not a production privilege boundary. The daemon must only be run from
+root-owned, non-user-writable files and a sanitized environment. It has no
+service integration, security review or durable startup/cleanup design; a
+blocked system probe may stall it. It must not be made setuid or exposed to
+untrusted users. Disk inventory may trigger kernel probing as described above.
+In a disposable QEMU guest, a manually started daemon let the authorized
+user query PCI details, denied another user, and refused an install request.
+The [GUI showed the resulting finding](docs/screenshots/qemu-privileged-readonly.png).
+These checks do not establish safety for privileged installation operations.

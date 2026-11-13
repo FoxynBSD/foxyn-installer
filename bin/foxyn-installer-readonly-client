@@ -1,0 +1,44 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'socket'
+require 'json'
+require_relative '../lib/foxyn_installer/read_only_server'
+
+begin
+  path = ENV.fetch('FOXYN_INSTALLER_SOCKET')
+  directory = File.dirname(path)
+  unless path.match?(%r{\A/var/run/foxyn-installer\.[A-Za-z0-9-]+/backend\.sock\z})
+    raise 'invalid socket path'
+  end
+  dir_stat = File.lstat(directory)
+  socket_stat = File.lstat(path)
+  unless dir_stat.directory? && dir_stat.uid.zero? && (dir_stat.mode & 0o022).zero? &&
+         socket_stat.socket? && socket_stat.uid == Process.euid && (socket_stat.mode & 0o077).zero?
+    raise 'untrusted socket permissions'
+  end
+  request = STDIN.gets(FoxynInstaller::ReadOnlyServer::MAX_REQUEST + 1)
+  raise 'invalid request length' unless request && request.end_with?("\n") && request.bytesize <= FoxynInstaller::ReadOnlyServer::MAX_REQUEST
+  parsed = JSON.parse(request)
+  raise 'operation unavailable' unless parsed.is_a?(Hash) && FoxynInstaller::ReadOnlyServer::ALLOWED.include?(parsed['operation'])
+  socket = UNIXSocket.new(path)
+  raise 'server is not root' unless socket.getpeereid.first.zero?
+  socket.write(request)
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + FoxynInstaller::ReadOnlyServer::TIMEOUT
+  response = +''
+  until response.include?("\n")
+    remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    raise 'server timeout' if remaining <= 0 || !IO.select([socket], nil, nil, remaining)
+    data = socket.read_nonblock(4096, exception: false)
+    next if data == :wait_readable
+    raise 'server disconnected' if data.nil? || data.empty?
+    response << data
+    raise 'response too large' if response.bytesize > FoxynInstaller::ReadOnlyServer::MAX_RESPONSE
+  end
+  puts response.split("\n", 2).first
+rescue StandardError => e
+  warn "foxyn-installer-readonly-client: #{e.message}"
+  exit 1
+ensure
+  socket&.close
+end
